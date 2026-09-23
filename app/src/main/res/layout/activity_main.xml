@@ -62,7 +62,7 @@
             android:layout_alignParentLeft="true"
             android:layout_centerVertical="true"
             android:alpha="0.5"
-            android:text="v10.10.14"
+            android:text="v10.10.15"
             android:textColor="#ffffff"
             android:textSize="12sp" />
 

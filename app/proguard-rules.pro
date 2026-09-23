@@ -19,3 +19,13 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+-keep class ly.img.android.pesdk.utils.DataSourceArrayList {
+    void <init>();
+}
+-keep class ly.img.android.pesdk.ui.utils.DataSourceIdItemList {
+    void <init>();
+}
+-keep public class * extends ly.img.android.pesdk.backend.operator.preview.GlOperation {
+    public <init>();
+}
