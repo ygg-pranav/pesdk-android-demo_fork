@@ -35,6 +35,11 @@ IMGLY.configure {
         include("assets:sticker-shapes")
         include("assets:sticker-emoticons")
         include("backend:sticker-smart")
+
+        // Additional modules needed to reproduce the issue
+        include("backend:background-removal")
+        include("backend:sticker-animated")
+        include("ui:giphy-sticker")
     }
 }
 

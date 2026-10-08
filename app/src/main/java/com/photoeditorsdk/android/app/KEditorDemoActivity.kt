@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
@@ -18,6 +19,7 @@ import ly.img.android.pesdk.assets.overlay.basic.OverlayPackBasic
 import ly.img.android.pesdk.assets.sticker.emoticons.StickerPackEmoticons
 import ly.img.android.pesdk.assets.sticker.shapes.StickerPackShapes
 import ly.img.android.pesdk.backend.model.EditorSDKResult
+import ly.img.android.pesdk.backend.model.constant.ImageExportFormat
 import ly.img.android.pesdk.backend.model.constant.OutputMode
 import ly.img.android.pesdk.backend.model.state.LoadSettings
 import ly.img.android.pesdk.backend.model.state.PhotoEditorSaveSettings
@@ -37,6 +39,9 @@ class KEditorDemoActivity : Activity() {
     companion object {
         const val PESDK_RESULT = 1
         const val GALLERY_RESULT = 2
+
+        // true = minimal settings used to reproduce the issue, false = original demo settings
+        const val USE_REPRO_SETTINGS = true
     }
 
     // Create a empty new SettingsList and apply the changes on this reference.
@@ -67,7 +72,8 @@ class KEditorDemoActivity : Activity() {
         .configure<PhotoEditorSaveSettings> {
             // Set custom editor image export settings
             it.setOutputToGallery(Environment.DIRECTORY_DCIM)
-            it.outputMode = OutputMode.EXPORT_IF_NECESSARY
+            it.setExportFormat(ImageExportFormat.JPEG)
+            it.jpegQuality = 80
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -82,7 +88,13 @@ class KEditorDemoActivity : Activity() {
     }
 
     fun openSystemGalleryToSelectAnImage() {
-        val intent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        // Reproduction uses the system photo picker (same as ActivityResultContracts.PickVisualMedia),
+        // which returns photo picker URIs. Available on Android 13+.
+        val intent = if (USE_REPRO_SETTINGS && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).setType("image/*")
+        } else {
+            Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
+        }
         try {
             startActivityForResult(intent, GALLERY_RESULT)
         } catch (ex: ActivityNotFoundException) {
@@ -94,11 +106,27 @@ class KEditorDemoActivity : Activity() {
         }
     }
 
-    fun openEditor(inputImage: Uri?) {
-        val settingsList = createPesdkSettingsList()
+    /**
+     * Minimal settings used to reproduce the issue: serialization disabled, no custom asset lists,
+     * only the source image + JPEG export at 80% quality (output goes to the default temp location).
+     */
+    private fun createReproSettingsList(photoUri: Uri?, exportQuality: Int = 80) =
+        PhotoEditorSettingsList(false)
+            .configure<LoadSettings> {
+                it.source = photoUri
+            }
+            .configure<PhotoEditorSaveSettings> {
+                it.setExportFormat(ImageExportFormat.JPEG)
+                it.jpegQuality = exportQuality
+            }
 
-        settingsList.configure<LoadSettings> {
-            it.source = inputImage
+    fun openEditor(inputImage: Uri?) {
+        val settingsList = if (USE_REPRO_SETTINGS) {
+            createReproSettingsList(inputImage)
+        } else {
+            createPesdkSettingsList().configure<LoadSettings> {
+                it.source = inputImage
+            }
         }
 
         PhotoEditorBuilder(this)
@@ -131,13 +159,16 @@ class KEditorDemoActivity : Activity() {
 
             // OPTIONAL: read the latest state to save it as a serialisation
             val lastState = data.settingsList
-            try {
-                IMGLYFileWriter(lastState).writeJson(File(
-                    Environment.getExternalStorageDirectory(),
-                    "serialisationReadyToReadWithPESDKFileReader.json"
-                ))
-            } catch (e: IOException) {
-                e.printStackTrace()
+            if (!USE_REPRO_SETTINGS) {
+                // Repro settings use PhotoEditorSettingsList(false), so the state is not serialised
+                try {
+                    IMGLYFileWriter(lastState).writeJson(File(
+                        Environment.getExternalStorageDirectory(),
+                        "serialisationReadyToReadWithPESDKFileReader.json"
+                    ))
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                }
             }
 
             lastState.release()
